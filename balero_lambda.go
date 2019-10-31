@@ -84,7 +84,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			for i, _ := range intMin[:len(intMin)-2] {
 				twoTrainDelta := intMin[i+2] - intMin[i]
 				if twoTrainDelta <= timeWindow {
-					partAlertMsg := fmt.Sprintf("%s %d %d %d : %d", targetTrains, intMin[i], intMin[i+1], intMin[i+2], twoTrainDelta)
+					partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d", targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
 					alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, partAlertMsg)
 					numResults += 1
 				}
