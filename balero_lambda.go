@@ -27,6 +27,10 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		message := SNSMessage{}
 		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
+		if !(strings.EqualFold(message.MessageBody, "ready")) {
+			return
+		}
+
 		var phone string = message.OriginationNumber
 		var station string = "MONT"
 		var dir string = "n"
