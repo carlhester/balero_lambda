@@ -45,18 +45,9 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n", strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
 		SendSNS(ackTxt, phone)
 
-		url := "http://api.bart.gov/api/etd.aspx?cmd=etd&orig=" + station + "&key=" + KEY + "&dir=" + dir + "&json=y"
-		resp, err := http.Get(url)
-		if err != nil {
-			panic(err.Error())
-		}
-		data, err := ioutil.ReadAll(resp.Body)
-		defer resp.Body.Close()
-		if err != nil {
-			panic(err.Error())
-		}
-
-		usableData := RawDataIntoDataStruct(data)
+		url := prepareUrl(station, KEY, dir)
+		rawData := rawDataFromUrl(url)
+		usableData := RawDataIntoDataStruct(rawData)
 
 		var targetTrains []string
 		var targetMinutes []string
@@ -102,6 +93,23 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func rawDataFromUrl(url string) []byte {
+	resp, err := http.Get(url)
+	if err != nil {
+		panic(err.Error())
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+func prepareUrl(station string, key string, dir string) string {
+	url := "http://api.bart.gov/api/etd.aspx?cmd=etd&orig=" + station + "&key=" + key + "&dir=" + dir + "&json=y"
+	return url
 }
 
 func convertStrMinutesToInt(minutes []string) []int {
