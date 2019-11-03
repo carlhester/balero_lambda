@@ -27,7 +27,11 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		message := SNSMessage{}
 		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
-		if !(strings.EqualFold(message.MessageBody, "ready")) {
+		if strings.EqualFold(message.Body, "setup") {
+			return
+		}
+
+		if !(strings.EqualFold(message.Body, "ready")) {
 			return
 		}
 
@@ -102,9 +106,11 @@ func rawDataFromUrl(url string) []byte {
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
+
 	if err != nil {
 		panic(err.Error())
 	}
+	return data
 }
 
 func prepareUrl(station string, key string, dir string) string {
@@ -202,7 +208,7 @@ type SNSMessage struct {
 	OriginationNumber          string `json:"originationNumber"`
 	DestinationNumber          string `json:"DestinationNumber"`
 	MessageKeyword             string `json:"messageKeyword"`
-	MessageBody                string `json:"messageBody"`
+	Body                       string `json:"messageBody"`
 	InboundMessageId           string `json:"inboundMessageId"`
 	PreviousPublishedMessageId string `json:"previousPublishedMessageId"`
 }
