@@ -27,14 +27,6 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		message := SNSMessage{}
 		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
-		if strings.EqualFold(message.Body, "setup") {
-			return
-		}
-
-		if !(strings.EqualFold(message.Body, "ready")) {
-			return
-		}
-
 		var phone string = message.OriginationNumber
 		var station string = "MONT"
 		var dir string = "n"
@@ -44,6 +36,14 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		if dir == "s" {
 			dirText = "South"
+		}
+
+		if strings.EqualFold(message.Body, "setup") {
+			setupNewUser(phone)
+		}
+
+		if !(strings.EqualFold(message.Body, "ready")) {
+			return
 		}
 
 		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n", strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
@@ -97,6 +97,11 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func setupNewUser(phone string) {
+	SendSNS("Welcome!", phone)
+
 }
 
 func rawDataFromUrl(url string) []byte {
