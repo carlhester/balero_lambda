@@ -4,6 +4,7 @@ import "fmt"
 import "context"
 import "net/http"
 import "io/ioutil"
+import "os"
 import "strconv"
 import "strings"
 import "sort"
@@ -14,6 +15,8 @@ import "github.com/aws/aws-sdk-go/aws/session"
 import "github.com/aws/aws-sdk-go/service/sns"
 import "github.com/aws/aws-lambda-go/lambda"
 import "github.com/aws/aws-lambda-go/events"
+import "github.com/aws/aws-sdk-go/service/dynamodb"
+import "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
 func main() {
 	lambda.Start(HandleRequest)
@@ -100,7 +103,8 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 }
 
 func setupNewUser(phone string) {
-	SendSNS("Welcome!", phone)
+	SendSNS("Welcome!!", phone)
+	updateContact()
 
 }
 
@@ -160,6 +164,42 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	return &usableData
 }
 
+func updateContact() {
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+	svc := dynamodb.New(sess)
+
+	contact := Contact{
+		Phone:   "15551234567",
+		Dir:     "s",
+		Station: "MONT",
+		Line:    "YELLOW",
+	}
+
+	av, err := dynamodbattribute.MarshalMap(contact)
+
+	fmt.Println(av)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String("db_test"),
+	}
+
+	put, err := svc.PutItem(input)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	fmt.Println(put)
+
+}
+
 type Estimates []struct {
 	Minutes     string `json:"minutes"`
 	Direction   string `json:"direction"`
@@ -216,4 +256,11 @@ type SNSMessage struct {
 	Body                       string `json:"messageBody"`
 	InboundMessageId           string `json:"inboundMessageId"`
 	PreviousPublishedMessageId string `json:"previousPublishedMessageId"`
+}
+
+type Contact struct {
+	Phone   string
+	Dir     string
+	Station string
+	Line    string
 }
