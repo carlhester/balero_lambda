@@ -104,7 +104,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 func setupNewUser(phone string) {
 	SendSNS("Welcome!!", phone)
-	updateContact()
+	updateContact(phone)
 
 }
 
@@ -164,22 +164,20 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	return &usableData
 }
 
-func updateContact() {
+func updateContact(phone string) {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 	svc := dynamodb.New(sess)
 
 	contact := Contact{
-		Phone:   "15551234567",
+		Phone:   phone,
 		Dir:     "s",
 		Station: "MONT",
 		Line:    "YELLOW",
 	}
 
 	av, err := dynamodbattribute.MarshalMap(contact)
-
-	fmt.Println(av)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -191,12 +189,11 @@ func updateContact() {
 		TableName: aws.String("db_test"),
 	}
 
-	put, err := svc.PutItem(input)
+	_, err = svc.PutItem(input)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-	fmt.Println(put)
 
 }
 
