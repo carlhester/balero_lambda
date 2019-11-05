@@ -43,6 +43,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		if strings.EqualFold(message.Body, "setup") {
 			setupNewUser(phone)
+			return
+		}
+
+		if strings.EqualFold(message.Body, "whoami") {
+			provideUserConfig(phone)
+			return
 		}
 
 		if !(strings.EqualFold(message.Body, "ready")) {
@@ -108,6 +114,13 @@ func setupNewUser(phone string) {
 
 }
 
+func provideUserConfig(phone string) {
+	contact := getContact(phone)
+	result := fmt.Sprintf("%s %s %s", contact.Dir, contact.Station, contact.Line)
+	SendSNS(result, phone)
+
+}
+
 func rawDataFromUrl(url string) []byte {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -164,6 +177,34 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	return &usableData
 }
 
+func getContact(phone string) Contact {
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+
+	svc := dynamodb.New(sess)
+	result, err := svc.GetItem(&dynamodb.GetItemInput{
+		TableName: aws.String("db_test"),
+		Key: map[string]*dynamodb.AttributeValue{
+			"Phone": {
+				S: aws.String(phone),
+			},
+		},
+	})
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	contact := Contact{}
+	err = dynamodbattribute.UnmarshalMap(result.Item, &contact)
+	if err != nil {
+		fmt.Errorf("failed to unmarshal Query result items, %v", err)
+	}
+
+	return contact
+}
+
 func updateContact(phone string) {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -172,7 +213,7 @@ func updateContact(phone string) {
 
 	contact := Contact{
 		Phone:   phone,
-		Dir:     "s",
+		Dir:     "n",
 		Station: "MONT",
 		Line:    "YELLOW",
 	}

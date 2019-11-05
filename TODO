@@ -1,4 +1,4 @@
 [x] remove stations that don't fit minute threshold
 [ ] allow default overrides
-[ ] save profile by phone number to db
+[x] save profile by phone number to db
 [ ] set up user profile on first contact
