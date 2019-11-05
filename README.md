@@ -9,4 +9,8 @@
 - Pinpoint number needs to be set up for 2-way SMS and pipe into SNS
 - SNS should trigger lambda
 
+perms:
+lambda role
+-sns publish
+-dynamodb read/write table
 
