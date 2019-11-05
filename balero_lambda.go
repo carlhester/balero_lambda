@@ -41,6 +41,10 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			dirText = "South"
 		}
 
+		if isNewContact(phone) {
+			setupNewUser(phone)
+		}
+
 		if strings.EqualFold(message.Body, "setup") {
 			setupNewUser(phone)
 			return
@@ -109,9 +113,8 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 }
 
 func setupNewUser(phone string) {
-	SendSNS("Welcome!!", phone)
+	SendSNS("Welcome!", phone)
 	updateContact(phone)
-
 }
 
 func provideUserConfig(phone string) {
@@ -175,6 +178,14 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	var usableData Data
 	json.Unmarshal([]byte(rawData), &usableData)
 	return &usableData
+}
+
+func isNewContact(phone string) bool {
+	contact := getContact(phone)
+	if len(contact.Phone) > 0 {
+		return false
+	}
+	return true
 }
 
 func getContact(phone string) Contact {
