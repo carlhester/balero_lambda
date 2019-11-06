@@ -18,8 +18,6 @@ import "github.com/aws/aws-lambda-go/events"
 import "github.com/aws/aws-sdk-go/service/dynamodb"
 import "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
-var tableName string = "db_test"
-
 func main() {
 	lambda.Start(HandleRequest)
 }
@@ -32,45 +30,39 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		message := SNSMessage{}
 		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
-		contact := Contact{
-			Phone:   message.OriginationNumber,
-			Dir:     "n",
-			Station: "mont",
-			Line:    "yellow",
-		}
-
+		var phone string = message.OriginationNumber
+		var station string = "MONT"
+		var dir string = "n"
+		var targetLine string = "YELLOW"
 		var timeWindow int = 15
-		var dirText string = "north"
+		var dirText string = "North"
 
-		if contact.Dir == "s" {
-			dirText = "south"
+		if dir == "s" {
+			dirText = "South"
 		}
 
-		messageBody := strings.ToLower(message.Body)
+		if isNewContact(phone) {
+			setupNewUser(phone)
+		}
 
-		if isNewContact(contact) {
-			setupNewUser(contact.Phone, contact.Dir, contact.Station, contact.Line)
+		if strings.EqualFold(message.Body, "setup") {
+			setupNewUser(phone)
 			return
 		}
 
-		if strings.EqualFold(messageBody, "setup") {
-			setupNewUser(contact.Phone, contact.Dir, contact.Station, contact.Line)
+		if strings.EqualFold(message.Body, "whoami") {
+			provideUserConfig(phone)
 			return
 		}
 
-		if strings.EqualFold(messageBody, "whoami") {
-			provideUserConfig(contact)
+		if !(strings.EqualFold(message.Body, "ready")) {
 			return
 		}
 
-		if !(strings.EqualFold(messageBody, "ready")) {
-			return
-		}
+		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n", strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
+		SendSNS(ackTxt, phone)
 
-		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n", strings.ToLower(contact.Line), strings.ToLower(dirText), strings.ToLower(contact.Station), timeWindow)
-		SendSNS(ackTxt, contact.Phone)
-
-		url := prepareUrl(contact.Station, KEY, contact.Dir)
+		url := prepareUrl(station, KEY, dir)
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
@@ -79,7 +71,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		for _, train := range usableData.Root.Station[0].Etd {
 			for _, est := range train.Est {
-				if strings.EqualFold(est.Color, contact.Line) {
+				if strings.EqualFold(est.Color, targetLine) {
 					targetTrains = append(targetTrains, train.Abbreviation)
 					targetMinutes = append(targetMinutes, est.Minutes)
 				}
@@ -104,31 +96,32 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			for i, _ := range intMin[:len(intMin)-2] {
 				twoTrainDelta := intMin[i+2] - intMin[i]
 				if twoTrainDelta <= timeWindow {
-					partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d",
-						targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
+					partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d", targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
 					alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, partAlertMsg)
 					numResults += 1
 				}
 			}
 		}
 		if numResults > 0 {
-			SendSNS(alertMsg, contact.Phone)
+			SendSNS(alertMsg, phone)
 		} else {
-			SendSNS("No trains found", contact.Phone)
+			SendSNS("No trains found", phone)
 		}
+
 	}
 	return
 }
 
-func setupNewUser(phone string, dir string, station string, line string) {
+func setupNewUser(phone string) {
 	SendSNS("Welcome!", phone)
-	updateContact(phone, dir, station, line)
+	updateContact(phone)
 }
 
-func provideUserConfig(c Contact) {
-	contact := getContact(c)
+func provideUserConfig(phone string) {
+	contact := getContact(phone)
 	result := fmt.Sprintf("%s %s %s", contact.Dir, contact.Station, contact.Line)
-	SendSNS(result, contact.Phone)
+	SendSNS(result, phone)
+
 }
 
 func rawDataFromUrl(url string) []byte {
@@ -187,25 +180,25 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	return &usableData
 }
 
-func isNewContact(c Contact) bool {
-	contact := getContact(c)
+func isNewContact(phone string) bool {
+	contact := getContact(phone)
 	if len(contact.Phone) > 0 {
 		return false
 	}
 	return true
 }
 
-func getContact(c Contact) Contact {
+func getContact(phone string) Contact {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
 	svc := dynamodb.New(sess)
 	result, err := svc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String("db_test"),
 		Key: map[string]*dynamodb.AttributeValue{
 			"Phone": {
-				S: aws.String(c.Phone),
+				S: aws.String(phone),
 			},
 		},
 	})
@@ -223,7 +216,7 @@ func getContact(c Contact) Contact {
 	return contact
 }
 
-func updateContact(phone string, dir string, station string, line string) {
+func updateContact(phone string) {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
@@ -231,9 +224,9 @@ func updateContact(phone string, dir string, station string, line string) {
 
 	contact := Contact{
 		Phone:   phone,
-		Dir:     dir,
-		Station: station,
-		Line:    line,
+		Dir:     "n",
+		Station: "MONT",
+		Line:    "YELLOW",
 	}
 
 	av, err := dynamodbattribute.MarshalMap(contact)
@@ -245,7 +238,7 @@ func updateContact(phone string, dir string, station string, line string) {
 
 	input := &dynamodb.PutItemInput{
 		Item:      av,
-		TableName: aws.String(tableName),
+		TableName: aws.String("db_test"),
 	}
 
 	_, err = svc.PutItem(input)
