@@ -30,28 +30,27 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		message := SNSMessage{}
 		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
-		var phone string = message.OriginationNumber
-		var station string = "MONT"
-		var dir string = "n"
-		var targetLine string = "YELLOW"
+		var contact Contact
+		contact = getContact(contact.Phone)
+
+		contact.Phone = message.OriginationNumber
+		contact.Station = "mont"
+		contact.Dir = "n"
+		contact.Line = "yellow"
+
 		var timeWindow int = 15
 		var dirText string = "North"
 
-		if dir == "s" {
+		if contact.Dir == "s" {
 			dirText = "South"
 		}
 
-		if isNewContact(phone) {
-			setupNewUser(phone)
-		}
-
-		if strings.EqualFold(message.Body, "setup") {
-			setupNewUser(phone)
-			return
+		if isNewContact(contact) {
+			setupNewUser(contact)
 		}
 
 		if strings.EqualFold(message.Body, "whoami") {
-			provideUserConfig(phone)
+			provideUserConfig(contact)
 			return
 		}
 
@@ -60,10 +59,10 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		}
 
 		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
-			strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
-		SendSNS(ackTxt, phone)
+			strings.ToLower(contact.Line), strings.ToLower(dirText), strings.ToLower(contact.Station), timeWindow)
+		SendSNS(ackTxt, contact)
 
-		url := prepareUrl(station, KEY, dir)
+		url := prepareUrl(contact.Station, KEY, contact.Dir)
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
@@ -72,7 +71,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		for _, train := range usableData.Root.Station[0].Etd {
 			for _, est := range train.Est {
-				if strings.EqualFold(est.Color, targetLine) {
+				if strings.EqualFold(est.Color, contact.Line) {
 					targetTrains = append(targetTrains, train.Abbreviation)
 					targetMinutes = append(targetMinutes, est.Minutes)
 				}
@@ -98,9 +97,9 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			}
 		}
 		if numResults > 0 {
-			SendSNS(alertMsg, phone)
+			SendSNS(alertMsg, contact)
 		} else {
-			SendSNS("No trains found", phone)
+			SendSNS("No trains found", contact)
 		}
 
 	}
@@ -118,15 +117,15 @@ func getTimestamp() string {
 	return timeStamp
 }
 
-func setupNewUser(phone string) {
-	SendSNS("Welcome!", phone)
-	updateContact(phone)
+func setupNewUser(contact Contact) {
+	SendSNS("Welcome!", contact)
+	updateContact(contact)
 }
 
-func provideUserConfig(phone string) {
-	contact := getContact(phone)
+func provideUserConfig(contact Contact) {
+	contact = getContact(contact.Phone)
 	result := fmt.Sprintf("%s %s %s", contact.Dir, contact.Station, contact.Line)
-	SendSNS(result, phone)
+	SendSNS(result, contact)
 
 }
 
@@ -164,13 +163,13 @@ func convertStrMinutesToInt(minutes []string) []int {
 	return intMin
 }
 
-func SendSNS(message string, phone string) {
+func SendSNS(message string, contact Contact) {
 	sess := session.Must(session.NewSession())
 	svc := sns.New(sess)
 
 	params := &sns.PublishInput{
 		Message:     aws.String(message),
-		PhoneNumber: aws.String(phone),
+		PhoneNumber: aws.String(contact.Phone),
 	}
 	_, err := svc.Publish(params)
 
@@ -186,8 +185,8 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 	return &usableData
 }
 
-func isNewContact(phone string) bool {
-	contact := getContact(phone)
+func isNewContact(contact Contact) bool {
+	contact = getContact(contact.Phone)
 	if len(contact.Phone) > 0 {
 		return false
 	}
@@ -222,17 +221,17 @@ func getContact(phone string) Contact {
 	return contact
 }
 
-func updateContact(phone string) {
+func updateContact(contact Contact) {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 	svc := dynamodb.New(sess)
 
-	contact := Contact{
-		Phone:   phone,
-		Dir:     "n",
-		Station: "MONT",
-		Line:    "YELLOW",
+	contact = Contact{
+		Phone:   contact.Phone,
+		Dir:     contact.Dir,
+		Station: contact.Station,
+		Line:    contact.Line,
 	}
 
 	av, err := dynamodbattribute.MarshalMap(contact)
