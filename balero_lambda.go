@@ -46,15 +46,17 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb", "bayf", "cast", "civc", "cols", "colm", "conc", "daly", "dbrk", "dubl", "deln", "plza", "embr", "frmt", "ftvl", "glen", "hayw", "lafy", "lake", "mcar", "mlbr", "mont", "nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil", "powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay", "ssan", "ucty", "warm", "wcrk", "wdub", "woak":
 			c.Station = msg
 			updateContact(c)
+			provideUserConfig(c)
 
 		case "n", "s":
 			c.Dir = msg
 			updateContact(c)
+			provideUserConfig(c)
 
 		case "yellow", "red", "blue", "orange", "green":
 			c.Line = msg
 			updateContact(c)
-
+			provideUserConfig(c)
 		}
 
 		var timeWindow int = 15
@@ -134,7 +136,7 @@ func setupNewUser(contact Contact) {
 
 func provideUserConfig(c Contact) {
 	contact := getContact(c.Phone)
-	result := fmt.Sprintf("%s - %s - %s", contact.Dir, contact.Station, contact.Line)
+	result := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
 	SendSMS(result, contact)
 }
 
