@@ -59,7 +59,8 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			return
 		}
 
-		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n", strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
+		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
+			strings.ToLower(targetLine), strings.ToLower(dirText), strings.ToLower(station), timeWindow)
 		SendSNS(ackTxt, phone)
 
 		url := prepareUrl(station, KEY, dir)
@@ -78,13 +79,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			}
 		}
 
-		loc, err := time.LoadLocation("America/Los_Angeles")
-		if err != nil {
-			panic(err.Error())
-		}
-		currTime := time.Now()
-		currTime = currTime.In(loc)
-		timeStamp := fmt.Sprintf("%s", currTime.Format("Jan _2 15:04:05"))
+		timeStamp := getTimestamp()
 
 		intMin := convertStrMinutesToInt(targetMinutes)
 		sort.Ints(intMin)
@@ -110,6 +105,17 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func getTimestamp() string {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		panic(err.Error())
+	}
+	currTime := time.Now()
+	currTime = currTime.In(loc)
+	timeStamp := fmt.Sprintf("%s", currTime.Format("Jan _2 15:04:05"))
+	return timeStamp
 }
 
 func setupNewUser(phone string) {
