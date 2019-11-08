@@ -24,26 +24,31 @@ func main() {
 
 func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	const KEY = "MW9S-E7SL-26DU-VV8V" // public use key from bart website
+	var timeWindow int = 15
+	var targetTrains []string
+	var targetMinutes []string
 
 	for _, record := range snsEvent.Records {
-		snsRecord := record.SNS
-		message := SNSMessage{}
-		_ = json.Unmarshal([]byte(snsRecord.Message), &message)
 
-		c := getContact(message.OriginationNumber)
+		messageEnvelope := unpackSNSEvent(record)
+		c := getContact(messageEnvelope.OriginationNumber)
 
 		if len(c.Phone) == 0 {
-			c.Phone = message.OriginationNumber
-			updateContact(c)
-			txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
-			SendSMS(txtMsg, c)
+			addNewUser(messageEnvelope.OriginationNumber)
 			return
 		}
 
-		msg := strings.ToLower(message.Body)
+		msg := strings.ToLower(messageEnvelope.Body)
 
 		switch msg {
-		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb", "bayf", "cast", "civc", "cols", "colm", "conc", "daly", "dbrk", "dubl", "deln", "plza", "embr", "frmt", "ftvl", "glen", "hayw", "lafy", "lake", "mcar", "mlbr", "mont", "nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil", "powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay", "ssan", "ucty", "warm", "wcrk", "wdub", "woak":
+
+		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb",
+			"bayf", "cast", "civc", "cols", "colm", "conc", "daly",
+			"dbrk", "dubl", "deln", "plza", "embr", "frmt", "ftvl",
+			"glen", "hayw", "lafy", "lake", "mcar", "mlbr", "mont",
+			"nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil",
+			"powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay",
+			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
 			c.Station = msg
 			updateContact(c)
 			provideUserConfig(c)
@@ -59,14 +64,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			provideUserConfig(c)
 		}
 
-		var timeWindow int = 15
-
 		if msg == "whoami" {
 			provideUserConfig(c)
 			return
 		}
 
-		if !(strings.EqualFold(message.Body, "ready")) {
+		if !(msg == "ready") {
 			return
 		}
 
@@ -77,9 +80,6 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		url := prepareUrl(c.Station, KEY, c.Dir)
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
-
-		var targetTrains []string
-		var targetMinutes []string
 
 		for _, train := range usableData.Root.Station[0].Etd {
 			for _, est := range train.Est {
@@ -116,6 +116,21 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func addNewUser(number string) {
+	c := Contact{Phone: number}
+	updateContact(c)
+	txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
+	SendSMS(txtMsg, c)
+	return
+}
+
+func unpackSNSEvent(record events.SNSEventRecord) SNSMessage {
+	snsRecord := record.SNS
+	message := SNSMessage{}
+	_ = json.Unmarshal([]byte(snsRecord.Message), &message)
+	return message
 }
 
 func getTimestamp() string {
