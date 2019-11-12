@@ -187,7 +187,7 @@ func provideUserConfig(c Contact) {
 
 func sendHelp(c Contact) {
 	contact := fetchContact(c.Phone)
-	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
+	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
 	SendSMSToContact(alertTxt, contact)
 }
 
