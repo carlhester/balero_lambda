@@ -39,6 +39,9 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		msg := strings.ToLower(messageEnvelope.Body)
 
 		switch msg {
+		case "!help":
+			sendHelp(c)
+			return
 
 		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb",
 			"bayf", "cast", "civc", "cols", "colm", "conc", "daly",
@@ -49,23 +52,44 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
 			c.updateStation(msg)
 			provideUserConfig(c)
+			return
 
 		case "n", "s":
 			c.updateDir(msg)
 			provideUserConfig(c)
+			return
 
 		case "yellow", "red", "blue", "orange", "green":
 			c.updateLine(msg)
 			provideUserConfig(c)
+			return
 
 		case "whoami":
 			provideUserConfig(c)
+			return
 
 		case "deleteme":
-			deleteContact(c)
+			c.deleteContact()
+			return
+		}
+
+		if len(c.Station) == 0 {
+			SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
+			return
+		}
+
+		if len(c.Line) == 0 {
+			SendSMSToContact("No line on your profile. Please provide a line (color).", c)
+			return
+		}
+
+		if len(c.Dir) == 0 {
+			SendSMSToContact("No direction on your profile. Please provide a direction.", c)
+			return
 		}
 
 		if !(msg == "ready") {
+			sendHelp(c)
 			return
 		}
 
@@ -155,8 +179,14 @@ func setupNewUser(c Contact) {
 
 func provideUserConfig(c Contact) {
 	contact := fetchContact(c.Phone)
-	result := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
-	SendSMSToContact(result, contact)
+	alertTxt := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
+	SendSMSToContact(alertTxt, contact)
+}
+
+func sendHelp(c Contact) {
+	contact := fetchContact(c.Phone)
+	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue\n commands: deleteme, whoami, setup"
+	SendSMSToContact(alertTxt, contact)
 }
 
 func rawDataFromUrl(url string) []byte {
@@ -251,14 +281,12 @@ func fetchContact(ph string) Contact {
 	return contact
 }
 
-func deleteContact(c Contact) {
+func (c Contact) deleteContact() {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
 	svc := dynamodb.New(sess)
-	ph := fmt.Sprintf("deleting you %s", c.Phone)
-	SendSMSToContact(ph, c)
 
 	input := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
@@ -273,6 +301,9 @@ func deleteContact(c Contact) {
 
 	if err != nil {
 		fmt.Printf("failed to delete result items, %v", err)
+	} else {
+		confirmation := fmt.Sprintf("Deleted %s", c.Phone)
+		SendSMSToContact(confirmation, c)
 	}
 }
 
