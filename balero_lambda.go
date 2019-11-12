@@ -24,9 +24,7 @@ func main() {
 
 func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	const KEY = "MW9S-E7SL-26DU-VV8V" // public use key from bart website
-	var timeWindow int = 15
-	var targetTrains []string
-	var targetMinutes []string
+	timeWindow := 15
 
 	for _, record := range snsEvent.Records {
 
@@ -59,8 +57,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		case "yellow", "red", "blue", "orange", "green":
 			c.updateLine(msg)
 			provideUserConfig(c)
+
 		case "whoami":
 			provideUserConfig(c)
+
+		case "deleteme":
+			deleteContact(c)
 		}
 
 		if !(msg == "ready") {
@@ -75,14 +77,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
-		for _, train := range usableData.Root.Station[0].Etd {
-			for _, est := range train.Est {
-				if strings.EqualFold(est.Color, c.Line) {
-					targetTrains = append(targetTrains, train.Abbreviation)
-					targetMinutes = append(targetMinutes, est.Minutes)
-				}
-			}
-		}
+		targetTrains, targetMinutes := buildTargets(*usableData, c)
 
 		timeStamp := fetchTimestamp()
 
@@ -111,6 +106,20 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func buildTargets(usableData Data, c Contact) ([]string, []string) {
+	var targetTrains []string
+	var targetMinutes []string
+	for _, train := range usableData.Root.Station[0].Etd {
+		for _, est := range train.Est {
+			if strings.EqualFold(est.Color, c.Line) {
+				targetTrains = append(targetTrains, train.Abbreviation)
+				targetMinutes = append(targetMinutes, est.Minutes)
+			}
+		}
+	}
+	return targetTrains, targetMinutes
 }
 
 func addNewUser(number string) {
@@ -240,6 +249,31 @@ func fetchContact(ph string) Contact {
 	}
 
 	return contact
+}
+
+func deleteContact(c Contact) {
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+
+	svc := dynamodb.New(sess)
+	ph := fmt.Sprintf("deleting you %s", c.Phone)
+	SendSMSToContact(ph, c)
+
+	input := &dynamodb.DeleteItemInput{
+		Key: map[string]*dynamodb.AttributeValue{
+			"Phone": {
+				S: aws.String(c.Phone),
+			},
+		},
+		TableName: aws.String("db_test"),
+	}
+
+	_, err := svc.DeleteItem(input)
+
+	if err != nil {
+		fmt.Printf("failed to delete result items, %v", err)
+	}
 }
 
 func (c Contact) updateDir(d string) {
