@@ -31,7 +31,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	for _, record := range snsEvent.Records {
 
 		messageEnvelope := unpackSNSEvent(record)
-		c := getContact(messageEnvelope.OriginationNumber)
+		c := fetchContact(messageEnvelope.OriginationNumber)
 
 		if len(c.Phone) == 0 {
 			addNewUser(messageEnvelope.OriginationNumber)
@@ -49,24 +49,18 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			"nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil",
 			"powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay",
 			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
-			c.Station = msg
-			updateContact(c)
+			c.updateStation(msg)
 			provideUserConfig(c)
 
 		case "n", "s":
-			c.Dir = msg
-			updateContact(c)
+			c.updateDir(msg)
 			provideUserConfig(c)
 
 		case "yellow", "red", "blue", "orange", "green":
-			c.Line = msg
-			updateContact(c)
+			c.updateLine(msg)
 			provideUserConfig(c)
-		}
-
-		if msg == "whoami" {
+		case "whoami":
 			provideUserConfig(c)
-			return
 		}
 
 		if !(msg == "ready") {
@@ -75,7 +69,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
 			strings.ToLower(c.Line), strings.ToLower(c.Dir), strings.ToLower(c.Station), timeWindow)
-		SendSMS(ackTxt, c)
+		SendSMSToContact(ackTxt, c)
 
 		url := prepareUrl(c.Station, KEY, c.Dir)
 		rawData := rawDataFromUrl(url)
@@ -90,7 +84,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			}
 		}
 
-		timeStamp := getTimestamp()
+		timeStamp := fetchTimestamp()
 
 		intMin := convertStrMinutesToInt(targetMinutes)
 		sort.Ints(intMin)
@@ -108,10 +102,11 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 				}
 			}
 		}
+
 		if numResults > 0 {
-			SendSMS(alertMsg, c)
+			SendSMSToContact(alertMsg, c)
 		} else {
-			SendSMS("No trains found", c)
+			SendSMSToContact("No trains found", c)
 		}
 
 	}
@@ -120,9 +115,9 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 func addNewUser(number string) {
 	c := Contact{Phone: number}
-	updateContact(c)
+	c.save()
 	txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
-	SendSMS(txtMsg, c)
+	SendSMSToContact(txtMsg, c)
 	return
 }
 
@@ -133,7 +128,7 @@ func unpackSNSEvent(record events.SNSEventRecord) SNSMessage {
 	return message
 }
 
-func getTimestamp() string {
+func fetchTimestamp() string {
 	loc, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
 		panic(err.Error())
@@ -144,15 +139,15 @@ func getTimestamp() string {
 	return timeStamp
 }
 
-func setupNewUser(contact Contact) {
-	SendSMS("Welcome!", contact)
-	updateContact(contact)
+func setupNewUser(c Contact) {
+	SendSMSToContact("Welcome!", c)
+	c.save()
 }
 
 func provideUserConfig(c Contact) {
-	contact := getContact(c.Phone)
+	contact := fetchContact(c.Phone)
 	result := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
-	SendSMS(result, contact)
+	SendSMSToContact(result, contact)
 }
 
 func rawDataFromUrl(url string) []byte {
@@ -189,7 +184,7 @@ func convertStrMinutesToInt(minutes []string) []int {
 	return intMin
 }
 
-func SendSMS(message string, contact Contact) {
+func SendSMSToContact(message string, contact Contact) {
 	sess := session.Must(session.NewSession())
 	svc := sns.New(sess)
 
@@ -212,14 +207,14 @@ func RawDataIntoDataStruct(rawData []byte) *Data {
 }
 
 func isNewContact(c Contact) bool {
-	contact := getContact(c.Phone)
+	contact := fetchContact(c.Phone)
 	if len(contact.Phone) > 0 {
 		return false
 	}
 	return true
 }
 
-func getContact(ph string) Contact {
+func fetchContact(ph string) Contact {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
@@ -247,7 +242,22 @@ func getContact(ph string) Contact {
 	return contact
 }
 
-func updateContact(c Contact) {
+func (c Contact) updateDir(d string) {
+	c.Dir = d
+	c.save()
+}
+
+func (c Contact) updateLine(l string) {
+	c.Line = l
+	c.save()
+}
+
+func (c Contact) updateStation(s string) {
+	c.Station = s
+	c.save()
+}
+
+func (c Contact) save() {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	}))
