@@ -33,6 +33,8 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		if len(c.Phone) == 0 {
 			addNewUser(messageEnvelope.OriginationNumber)
+			c := fetchContact(messageEnvelope.OriginationNumber)
+			sendHelp(c)
 			return
 		}
 
@@ -185,7 +187,7 @@ func provideUserConfig(c Contact) {
 
 func sendHelp(c Contact) {
 	contact := fetchContact(c.Phone)
-	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue\n commands: deleteme, whoami, setup"
+	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
 	SendSMSToContact(alertTxt, contact)
 }
 
