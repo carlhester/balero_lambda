@@ -2,5 +2,7 @@
 [x] allow default overrides
 [x] save profile by phone number to db
 [x] set up user profile on first contact
-[ ] allow user to self delete
+[x] allow user to self delete
+[ ] set up enable/disable recurring lerts
+[ ] test a scoring method
 

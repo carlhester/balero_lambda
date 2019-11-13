@@ -75,27 +75,14 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			return
 		}
 
-		if len(c.Station) == 0 {
-			SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
-			return
-		}
-
-		if len(c.Line) == 0 {
-			SendSMSToContact("No line on your profile. Please provide a line (color).", c)
-			return
-		}
-
-		if len(c.Dir) == 0 {
-			SendSMSToContact("No direction on your profile. Please provide a direction.", c)
-			return
-		}
+		checkAllFields(c)
 
 		if !(msg == "ready") {
 			sendHelp(c)
 			return
 		}
 
-		ackTxt := fmt.Sprintf("Hi! Here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
+		ackTxt := fmt.Sprintf("here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
 			strings.ToLower(c.Line), strings.ToLower(c.Dir), strings.ToLower(c.Station), timeWindow)
 		SendSMSToContact(ackTxt, c)
 
@@ -132,6 +119,23 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 	}
 	return
+}
+
+func checkAllFields(c Contact) {
+	if len(c.Station) == 0 {
+		SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
+		return
+	}
+
+	if len(c.Line) == 0 {
+		SendSMSToContact("No line on your profile. Please provide a line (color).", c)
+		return
+	}
+
+	if len(c.Dir) == 0 {
+		SendSMSToContact("No direction on your profile. Please provide a direction.", c)
+		return
+	}
 }
 
 func buildTargets(usableData Data, c Contact) ([]string, []string) {
