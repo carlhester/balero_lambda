@@ -29,11 +29,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	for _, record := range snsEvent.Records {
 
 		messageEnvelope := unpackSNSEvent(record)
-		c := fetchContact(messageEnvelope.OriginationNumber)
+
+		var c Contact = fetchContact(messageEnvelope.OriginationNumber)
 
 		if len(c.Phone) == 0 {
 			addNewUser(messageEnvelope.OriginationNumber)
-			c := fetchContact(messageEnvelope.OriginationNumber)
+			c = fetchContact(messageEnvelope.OriginationNumber)
 			sendHelp(c)
 			return
 		}
@@ -43,6 +44,10 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		switch msg {
 		case "!help":
 			sendHelp(c)
+			return
+
+		case "!stations":
+			c.sendStations()
 			return
 
 		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb",
@@ -185,13 +190,13 @@ func setupNewUser(c Contact) {
 
 func (c Contact) provideConfig() {
 	contact := fetchContact(c.Phone)
-	alertTxt := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
+	alertTxt := fmt.Sprintf("Settings\n\nStation: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
 	SendSMSToContact(alertTxt, contact)
 }
 
 func sendHelp(c Contact) {
 	contact := fetchContact(c.Phone)
-	alertTxt := "Stations: mont, powl, ncon\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
+	alertTxt := "Stations: mont, powl, ncon (!stations for list)\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
 	SendSMSToContact(alertTxt, contact)
 }
 
@@ -326,6 +331,17 @@ func (c Contact) updateLine(l string) {
 func (c Contact) updateStation(s string) {
 	c.Station = s
 	c.save()
+}
+
+func (c Contact) sendStations() {
+	msg := "12th 16th 19th 24th ashb antc balb " +
+		"bayf cast civc cols colm conc daly " +
+		"dbrk dubl deln plza embr frmt ftvl " +
+		"glen hayw lafy lake mcar mlbr mont " +
+		"nbrk ncon oakl orin pitt pctr phil " +
+		"powl rich rock sbrn sfia sanl shay " +
+		"ssan ucty warm wcrk wdub woak"
+	SendSMSToContact(msg, c)
 }
 
 func (c Contact) save() {
