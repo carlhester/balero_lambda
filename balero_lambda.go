@@ -75,7 +75,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			return
 		}
 
-		checkAllFields(c)
+		checkForEmptyFields(c)
 
 		if !(msg == "ready") {
 			sendHelp(c)
@@ -121,7 +121,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	return
 }
 
-func checkAllFields(c Contact) {
+func checkForEmptyFields(c Contact) {
 	if len(c.Station) == 0 {
 		SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
 		return
