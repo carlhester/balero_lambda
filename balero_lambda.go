@@ -53,21 +53,21 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			"powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay",
 			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
 			c.updateStation(msg)
-			provideUserConfig(c)
+			c.provideConfig()
 			return
 
 		case "n", "s":
 			c.updateDir(msg)
-			provideUserConfig(c)
+			c.provideConfig()
 			return
 
 		case "yellow", "red", "blue", "orange", "green":
 			c.updateLine(msg)
-			provideUserConfig(c)
+			c.provideConfig()
 			return
 
 		case "whoami":
-			provideUserConfig(c)
+			c.provideConfig()
 			return
 
 		case "deleteme":
@@ -183,7 +183,7 @@ func setupNewUser(c Contact) {
 	c.save()
 }
 
-func provideUserConfig(c Contact) {
+func (c Contact) provideConfig() {
 	contact := fetchContact(c.Phone)
 	alertTxt := fmt.Sprintf("Station: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
 	SendSMSToContact(alertTxt, contact)
