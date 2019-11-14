@@ -30,12 +30,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		messageEnvelope := unpackSNSEvent(record)
 
-		var c Contact = fetchContact(messageEnvelope.OriginationNumber)
+		var contact Contact = fetchContact(messageEnvelope.OriginationNumber)
 
-		if len(c.Phone) == 0 {
+		if len(contact.Phone) == 0 {
 			addNewUser(messageEnvelope.OriginationNumber)
-			c = fetchContact(messageEnvelope.OriginationNumber)
-			sendHelp(c)
+			contact = fetchContact(messageEnvelope.OriginationNumber)
+			contact.sendHelp()
 			return
 		}
 
@@ -43,11 +43,11 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		switch msg {
 		case "!help":
-			sendHelp(c)
+			contact.sendHelp()
 			return
 
 		case "!stations":
-			c.sendStations()
+			contact.sendStations()
 			return
 
 		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb",
@@ -57,45 +57,45 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			"nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil",
 			"powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay",
 			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
-			c.updateStation(msg)
-			c.provideConfig()
+			contact.updateStation(msg)
+			contact.provideConfig()
 			return
 
 		case "n", "s":
-			c.updateDir(msg)
-			c.provideConfig()
+			contact.updateDir(msg)
+			contact.provideConfig()
 			return
 
 		case "yellow", "red", "blue", "orange", "green":
-			c.updateLine(msg)
-			c.provideConfig()
+			contact.updateLine(msg)
+			contact.provideConfig()
 			return
 
 		case "whoami":
-			c.provideConfig()
+			contact.provideConfig()
 			return
 
 		case "deleteme":
-			c.deleteContact()
+			contact.deleteContact()
 			return
 		}
 
-		checkForEmptyFields(c)
+		checkForEmptyFields(contact)
 
 		if !(msg == "ready") {
-			sendHelp(c)
+			contact.sendHelp()
 			return
 		}
 
 		ackTxt := fmt.Sprintf("here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
-			strings.ToLower(c.Line), strings.ToLower(c.Dir), strings.ToLower(c.Station), timeWindow)
-		SendSMSToContact(ackTxt, c)
+			strings.ToLower(contact.Line), strings.ToLower(contact.Dir), strings.ToLower(contact.Station), timeWindow)
+		SendSMSToContact(ackTxt, contact)
 
-		url := prepareUrl(c.Station, KEY, c.Dir)
+		url := prepareUrl(contact.Station, KEY, contact.Dir)
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
-		targetTrains, targetMinutes := buildTargets(*usableData, c)
+		targetTrains, targetMinutes := buildTargets(*usableData, contact)
 
 		timeStamp := fetchTimestamp()
 
@@ -117,9 +117,9 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		}
 
 		if numResults > 0 {
-			SendSMSToContact(alertMsg, c)
+			SendSMSToContact(alertMsg, contact)
 		} else {
-			SendSMSToContact("No trains found", c)
+			SendSMSToContact("No trains found", contact)
 		}
 
 	}
@@ -194,7 +194,7 @@ func (c Contact) provideConfig() {
 	SendSMSToContact(alertTxt, contact)
 }
 
-func sendHelp(c Contact) {
+func (c Contact) sendHelp() {
 	contact := fetchContact(c.Phone)
 	alertTxt := "Stations: mont, powl, ncon (!stations for list)\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
 	SendSMSToContact(alertTxt, contact)
