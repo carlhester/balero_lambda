@@ -95,23 +95,19 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
-		// current : returns two string arrays and later converts minutes to integers and sorts
-		// TODO : return a single array containing structs that represent each train/minute combo
-		//targetTrains, targetMinutes := buildTargets(*usableData, contact)
-
-		//targetTrains is a minutes-sorted slice of TargetTrain structs
+		// targetTrains is a minutes-sorted slice of TargetTrain structs
 		targetTrains := buildTargets(*usableData, contact)
+
+		targetTrains = scoreTargets(targetTrains)
 
 		// set up the message we'll send back to user
 		timeStamp := fetchTimestamp()
 		alertMsg := timeStamp
 		numResults := 0
 
-		// temporary to troubleshoot
+		// temporarily always respond with options to troubleshoot
 		numResults += 1
-		alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, targetTrains)
-
-		//scoreTargetTrains(targetTrains)
+		alertMsg = fmt.Sprintf("%s\n%+v\n", alertMsg, targetTrains)
 
 		/*
 			if len(intMin) > 2 {
@@ -158,7 +154,7 @@ func buildTargets(usableData Data, c Contact) []TargetTrain {
 		for _, est := range train.Est {
 			if strings.EqualFold(est.Color, c.Line) {
 				var i TargetTrain
-				i.Train = train.Abbreviation
+				i.TrainName = train.Abbreviation
 				i.Minutes = convertStrMinutesToInt(est.Minutes)
 				i.Line = c.Line
 				i.Score = 0
@@ -167,6 +163,42 @@ func buildTargets(usableData Data, c Contact) []TargetTrain {
 		}
 	}
 	targets = sortSliceOfTargetTrains(targets)
+	return targets
+}
+
+func scoreTargets(targets []TargetTrain) []TargetTrain {
+
+	for i, train := range targets {
+		// if train going to my stop add 2
+		if train.TrainName == "WCRK" {
+			targets[i].Score += 2
+		}
+
+		// if train going past my stop (NCON, ANTC, PHIL) add 1
+		if train.TrainName == "NCON" {
+			targets[i].Score += 1
+		}
+		if train.TrainName == "ANTC" {
+			targets[i].Score += 1
+		}
+		if train.TrainName == "PHIL" {
+			targets[i].Score += 1
+		}
+
+		// if previous train was < 5 minutes ago + 5
+		if i > 0 {
+			if (targets[i].Minutes - targets[i-1].Minutes) < 5 {
+				targets[i].Score += 5
+			}
+		}
+
+		// if 2 previous trains on any line were within < 15 minutes ago + 10
+		if i > 1 {
+			if (targets[i].Minutes - targets[i-2].Minutes) < 15 {
+				targets[i].Score += 10
+			}
+		}
+	}
 	return targets
 }
 
@@ -472,8 +504,8 @@ type Contact struct {
 }
 
 type TargetTrain struct {
-	Train   string
-	Line    string
-	Minutes int
-	Score   int
+	TrainName string
+	Line      string
+	Minutes   int
+	Score     int
 }
