@@ -95,27 +95,36 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
-		targetTrains, targetMinutes := buildTargets(*usableData, contact)
+		// current : returns two string arrays and later converts minutes to integers and sorts
+		// TODO : return a single array containing structs that represent each train/minute combo
+		//targetTrains, targetMinutes := buildTargets(*usableData, contact)
 
+		//targetTrains is a minutes-sorted slice of TargetTrain structs
+		targetTrains := buildTargets(*usableData, contact)
+
+		// set up the message we'll send back to user
 		timeStamp := fetchTimestamp()
-
-		intMin := convertStrMinutesToInt(targetMinutes)
-		sort.Ints(intMin)
-
 		alertMsg := timeStamp
 		numResults := 0
 
-		if len(intMin) > 2 {
-			for i, _ := range intMin[:len(intMin)-2] {
-				twoTrainDelta := intMin[i+2] - intMin[i]
-				if twoTrainDelta <= timeWindow {
-					partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d", targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
-					alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, partAlertMsg)
-					numResults += 1
+		// temporary to troubleshoot
+		numResults += 1
+		alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, targetTrains)
+
+		//scoreTargetTrains(targetTrains)
+
+		/*
+			if len(intMin) > 2 {
+				for i, _ := range intMin[:len(intMin)-2] {
+					twoTrainDelta := intMin[i+2] - intMin[i]
+					if twoTrainDelta <= timeWindow {
+						partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d", targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
+						alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, partAlertMsg)
+						numResults += 1
+					}
 				}
 			}
-		}
-
+		*/
 		if numResults > 0 {
 			SendSMSToContact(alertMsg, contact)
 		} else {
@@ -143,18 +152,22 @@ func (c Contact) checkForEmptyFields() {
 	}
 }
 
-func buildTargets(usableData Data, c Contact) ([]string, []string) {
-	var targetTrains []string
-	var targetMinutes []string
+func buildTargets(usableData Data, c Contact) []TargetTrain {
+	targets := []TargetTrain{}
 	for _, train := range usableData.Root.Station[0].Etd {
 		for _, est := range train.Est {
 			if strings.EqualFold(est.Color, c.Line) {
-				targetTrains = append(targetTrains, train.Abbreviation)
-				targetMinutes = append(targetMinutes, est.Minutes)
+				var i TargetTrain
+				i.Train = train.Abbreviation
+				i.Minutes = convertStrMinutesToInt(est.Minutes)
+				i.Line = c.Line
+				i.Score = 0
+				targets = append(targets, i)
 			}
 		}
 	}
-	return targetTrains, targetMinutes
+	targets = sortSliceOfTargetTrains(targets)
+	return targets
 }
 
 func addNewUser(number string) {
@@ -219,7 +232,18 @@ func prepareUrl(station string, key string, dir string) string {
 	return url
 }
 
-func convertStrMinutesToInt(minutes []string) []int {
+func convertStrMinutesToInt(minutes string) int {
+	if minutes == "Leaving" {
+		minutes = "0"
+	}
+	i, err := strconv.Atoi(minutes)
+	if err != nil {
+		panic(err.Error())
+	}
+	return i
+}
+
+func convertSliceStrMinutesToSliceInt(minutes []string) []int {
 	var intMin []int
 	for _, strMin := range minutes {
 		if strMin == "Leaving" {
@@ -377,6 +401,11 @@ func (c Contact) save() {
 
 }
 
+func sortSliceOfTargetTrains(targets []TargetTrain) []TargetTrain {
+	sort.Slice(targets, func(i, j int) bool { return targets[i].Minutes < targets[j].Minutes })
+	return targets
+}
+
 type Estimates []struct {
 	Minutes     string `json:"minutes"`
 	Direction   string `json:"direction"`
@@ -440,4 +469,11 @@ type Contact struct {
 	Dir     string
 	Station string
 	Line    string
+}
+
+type TargetTrain struct {
+	Train   string
+	Line    string
+	Minutes int
+	Score   int
 }
