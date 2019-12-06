@@ -24,7 +24,6 @@ func main() {
 
 func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	const KEY = "MW9S-E7SL-26DU-VV8V" // public use key from bart website
-	timeWindow := 15
 
 	for _, record := range snsEvent.Records {
 
@@ -87,9 +86,8 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			return
 		}
 
-		ackTxt := fmt.Sprintf("here are the next three %s line trains heading %s from %s within %d minutes of each other.\n",
-			strings.ToLower(contact.Line), strings.ToLower(contact.Dir), strings.ToLower(contact.Station), timeWindow)
-		SendSMSToContact(ackTxt, contact)
+		//ackTxt := fmt.Sprintf("Train|Station|Minutes|Line|Points\n")
+		//SendSMSToContact(ackTxt, contact)
 
 		url := prepareUrl(contact.Station, KEY, contact.Dir)
 		rawData := rawDataFromUrl(url)
@@ -106,21 +104,13 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 		numResults := 0
 
 		// temporarily always respond with options to troubleshoot
-		numResults += 1
-		alertMsg = fmt.Sprintf("%s\n%+v\n", alertMsg, targetTrains)
 
-		/*
-			if len(intMin) > 2 {
-				for i, _ := range intMin[:len(intMin)-2] {
-					twoTrainDelta := intMin[i+2] - intMin[i]
-					if twoTrainDelta <= timeWindow {
-						partAlertMsg := fmt.Sprintf("%s %d \n%s %d \n%s %d\n%d", targetTrains[i], intMin[i], targetTrains[i+1], intMin[i+1], targetTrains[i+2], intMin[i+2], twoTrainDelta)
-						alertMsg = fmt.Sprintf("%s\n%s\n", alertMsg, partAlertMsg)
-						numResults += 1
-					}
-				}
-			}
-		*/
+		for _, train := range targetTrains {
+			numResults += 1
+			partAlertMsg := fmt.Sprintf("%d pts - %s in %d minutes", train.Score, train.TrainName, train.Minutes)
+			alertMsg = fmt.Sprintf("%s\n%s", alertMsg, partAlertMsg)
+		}
+
 		if numResults > 0 {
 			SendSMSToContact(alertMsg, contact)
 		} else {
