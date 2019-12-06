@@ -86,24 +86,19 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			return
 		}
 
-		//ackTxt := fmt.Sprintf("Train|Station|Minutes|Line|Points\n")
-		//SendSMSToContact(ackTxt, contact)
-
 		url := prepareUrl(contact.Station, KEY, contact.Dir)
 		rawData := rawDataFromUrl(url)
 		usableData := RawDataIntoDataStruct(rawData)
 
-		// targetTrains is a minutes-sorted slice of TargetTrain structs
+		// targetTrains is a slice of TargetTrain structs sorted by minutes
 		targetTrains := buildTargets(*usableData, contact)
 
-		targetTrains = scoreTargets(targetTrains)
+		targetTrains = scoreTargets(targetTrains, contact)
 
 		// set up the message we'll send back to user
 		timeStamp := fetchTimestamp()
 		alertMsg := timeStamp
 		numResults := 0
-
-		// temporarily always respond with options to troubleshoot
 
 		for _, train := range targetTrains {
 			numResults += 1
@@ -156,7 +151,8 @@ func buildTargets(usableData Data, c Contact) []TargetTrain {
 	return targets
 }
 
-func scoreTargets(targets []TargetTrain) []TargetTrain {
+func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
+	//targetLineTrains := []TargetTrain{}
 
 	for i, train := range targets {
 		// if train going to my stop add 2
@@ -164,7 +160,7 @@ func scoreTargets(targets []TargetTrain) []TargetTrain {
 			targets[i].Score += 2
 		}
 
-		// if train going past my stop (NCON, ANTC, PHIL) add 1
+		// if train going past my stop (NCON, ANTC, PHIL, PITT) add 1
 		if train.TrainName == "NCON" {
 			targets[i].Score += 1
 		}
@@ -174,6 +170,9 @@ func scoreTargets(targets []TargetTrain) []TargetTrain {
 		if train.TrainName == "PHIL" {
 			targets[i].Score += 1
 		}
+		if train.TrainName == "PITT" {
+			targets[i].Score += 1
+		}
 
 		// if previous train was < 5 minutes ago + 5
 		if i > 0 {
@@ -181,6 +180,23 @@ func scoreTargets(targets []TargetTrain) []TargetTrain {
 				targets[i].Score += 5
 			}
 		}
+
+		/*
+			// if 2 previous trains on MY line were within < 15 minutes ago + 15
+			if i > 1 {
+				if strings.EqualFold(c.Line, targets[i].Line) {
+					//targetLineTrains.append(targetLineTrains, train)
+				}
+				for j, lineTrain := range targetLineTrains {
+					if j > 1 {
+						if targetLineTrains[j].Minutes-targetLineTrains[j-2].Minutes < 15 {
+							// add points to outer loop train.Score
+						}
+					}
+				}
+			}
+
+		*/
 
 		// if 2 previous trains on any line were within < 15 minutes ago + 10
 		if i > 1 {
@@ -263,21 +279,6 @@ func convertStrMinutesToInt(minutes string) int {
 		panic(err.Error())
 	}
 	return i
-}
-
-func convertSliceStrMinutesToSliceInt(minutes []string) []int {
-	var intMin []int
-	for _, strMin := range minutes {
-		if strMin == "Leaving" {
-			strMin = "0"
-		}
-		i, err := strconv.Atoi(strMin)
-		if err != nil {
-			panic(err.Error())
-		}
-		intMin = append(intMin, i)
-	}
-	return intMin
 }
 
 func SendSMSToContact(message string, contact Contact) {

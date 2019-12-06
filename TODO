@@ -4,5 +4,8 @@
 [x] set up user profile on first contact
 [x] allow user to self delete
 [ ] set up enable/disable recurring lerts
-[ ] test a scoring method
+[x] test a scoring method
+[ ] keep adding scoring ideas
+[ ] prompt/store user for target station
+[ ] derive best line based on target station
 
