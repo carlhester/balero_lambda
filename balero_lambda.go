@@ -102,8 +102,10 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		for _, train := range targetTrains {
 			numResults += 1
-			partAlertMsg := fmt.Sprintf("%d pts - %s in %d minutes", train.Score, train.TrainName, train.Minutes)
-			alertMsg = fmt.Sprintf("%s\n%s", alertMsg, partAlertMsg)
+			if train.Score > 0 {
+				partAlertMsg := fmt.Sprintf("%d pts - %s in %d minutes", train.Score, train.TrainName, train.Minutes)
+				alertMsg = fmt.Sprintf("%s\n%s", alertMsg, partAlertMsg)
+			}
 		}
 
 		if numResults > 0 {
@@ -137,14 +139,14 @@ func buildTargets(usableData Data, c Contact) []TargetTrain {
 	targets := []TargetTrain{}
 	for _, train := range usableData.Root.Station[0].Etd {
 		for _, est := range train.Est {
-			if strings.EqualFold(est.Color, c.Line) {
-				var i TargetTrain
-				i.TrainName = train.Abbreviation
-				i.Minutes = convertStrMinutesToInt(est.Minutes)
-				i.Line = c.Line
-				i.Score = 0
-				targets = append(targets, i)
-			}
+			//if strings.EqualFold(est.Color, c.Line) {
+			var i TargetTrain
+			i.TrainName = train.Abbreviation
+			i.Minutes = convertStrMinutesToInt(est.Minutes)
+			i.Line = est.Color
+			i.Score = 0
+			targets = append(targets, i)
+			//}
 		}
 	}
 	targets = sortSliceOfTargetTrains(targets)
@@ -152,9 +154,10 @@ func buildTargets(usableData Data, c Contact) []TargetTrain {
 }
 
 func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
-	//targetLineTrains := []TargetTrain{}
+	targetLineTrains := []TargetTrain{}
 
 	for i, train := range targets {
+
 		// if train going to my stop add 2
 		if train.TrainName == "WCRK" {
 			targets[i].Score += 2
@@ -174,29 +177,12 @@ func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
 			targets[i].Score += 1
 		}
 
-		// if previous train was < 5 minutes ago + 5
+		// if previous train was < 3 minutes ago + 5
 		if i > 0 {
 			if (targets[i].Minutes - targets[i-1].Minutes) < 5 {
 				targets[i].Score += 5
 			}
 		}
-
-		/*
-			// if 2 previous trains on MY line were within < 15 minutes ago + 15
-			if i > 1 {
-				if strings.EqualFold(c.Line, targets[i].Line) {
-					//targetLineTrains.append(targetLineTrains, train)
-				}
-				for j, lineTrain := range targetLineTrains {
-					if j > 1 {
-						if targetLineTrains[j].Minutes-targetLineTrains[j-2].Minutes < 15 {
-							// add points to outer loop train.Score
-						}
-					}
-				}
-			}
-
-		*/
 
 		// if 2 previous trains on any line were within < 15 minutes ago + 10
 		if i > 1 {
@@ -204,7 +190,34 @@ func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
 				targets[i].Score += 10
 			}
 		}
+		// if train on my line, consider it a candidate and give it a point
+		if strings.EqualFold(c.Line, targets[i].Line) {
+			targetLineTrains = append(targetLineTrains, train)
+			targets[i].Score += 1
+		} else {
+			//if the train isn't on my line, set score to zero
+			targets[i].Score = 0
+		}
+
 	}
+
+	// loop over trains on my line
+	// if 3 trains on my line are within 15 minutes, give the third 20 pts
+	for j, _ := range targetLineTrains {
+		if j > 1 {
+			if targetLineTrains[j].Minutes-targetLineTrains[j-2].Minutes < 15 {
+				for i, _ := range targets {
+					if targets[i].TrainName == targetLineTrains[j].TrainName {
+						if targets[i].Minutes == targetLineTrains[j].Minutes {
+							targets[i].Score += 20
+						}
+					}
+				}
+
+			}
+		}
+	}
+
 	return targets
 }
 

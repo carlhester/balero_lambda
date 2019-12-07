@@ -14,3 +14,5 @@ lambda role
 -sns publish
 -dynamodb read/write table, delete item
 
+
+
