@@ -195,14 +195,14 @@ func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
 			targetLineTrains = append(targetLineTrains, train)
 			targets[i].Score += 1
 		} else {
-			//if the train isn't on my line, set score to zero
+			//if the train isn't on my line, set its score to zero
 			targets[i].Score = 0
 		}
 
 	}
 
 	// loop over trains on my line
-	// if 3 trains on my line are within 15 minutes, give the third 20 pts
+	// if 3 trains on my line are within 15 minutes, give the third one 20 pts
 	for j, _ := range targetLineTrains {
 		if j > 1 {
 			if targetLineTrains[j].Minutes-targetLineTrains[j-2].Minutes < 15 {
