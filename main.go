@@ -1,6 +1,6 @@
 package main
 
-import . "balero_lambda/contact"
+import . "balero_lambda/internal/contact"
 import "fmt"
 import "context"
 import "net/http"
