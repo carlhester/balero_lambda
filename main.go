@@ -118,23 +118,6 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 	return
 }
 
-func (c Contact) checkForEmptyFields() {
-	if len(c.Station) == 0 {
-		SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
-		return
-	}
-
-	if len(c.Line) == 0 {
-		SendSMSToContact("No line on your profile. Please provide a line (color).", c)
-		return
-	}
-
-	if len(c.Dir) == 0 {
-		SendSMSToContact("No direction on your profile. Please provide a direction.", c)
-		return
-	}
-}
-
 func buildTargets(usableData Data, c Contact) []TargetTrain {
 	targets := []TargetTrain{}
 	for _, train := range usableData.Root.Station[0].Etd {
@@ -221,14 +204,6 @@ func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
 	return targets
 }
 
-func addNewUser(number string) {
-	c := Contact{Phone: number}
-	c.save()
-	txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
-	SendSMSToContact(txtMsg, c)
-	return
-}
-
 func unpackSNSEvent(record events.SNSEventRecord) SNSMessage {
 	snsRecord := record.SNS
 	message := SNSMessage{}
@@ -252,16 +227,12 @@ func setupNewUser(c Contact) {
 	c.save()
 }
 
-func (c Contact) provideConfig() {
-	contact := fetchContact(c.Phone)
-	alertTxt := fmt.Sprintf("Settings\n\nStation: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
-	SendSMSToContact(alertTxt, contact)
-}
-
-func (c Contact) sendHelp() {
-	contact := fetchContact(c.Phone)
-	alertTxt := "Stations: mont, powl, ncon (!stations for list)\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
-	SendSMSToContact(alertTxt, contact)
+func addNewUser(number string) {
+	c := Contact{Phone: number}
+	c.save()
+	txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
+	SendSMSToContact(txtMsg, c)
+	return
 }
 
 func rawDataFromUrl(url string) []byte {
@@ -281,6 +252,11 @@ func rawDataFromUrl(url string) []byte {
 func prepareUrl(station string, key string, dir string) string {
 	url := "http://api.bart.gov/api/etd.aspx?cmd=etd&orig=" + station + "&key=" + key + "&dir=" + dir + "&json=y"
 	return url
+}
+
+func sortSliceOfTargetTrains(targets []TargetTrain) []TargetTrain {
+	sort.Slice(targets, func(i, j int) bool { return targets[i].Minutes < targets[j].Minutes })
+	return targets
 }
 
 func convertStrMinutesToInt(minutes string) int {
@@ -352,6 +328,23 @@ func fetchContact(ph string) Contact {
 	return contact
 }
 
+func (c Contact) checkForEmptyFields() {
+	if len(c.Station) == 0 {
+		SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
+		return
+	}
+
+	if len(c.Line) == 0 {
+		SendSMSToContact("No line on your profile. Please provide a line (color).", c)
+		return
+	}
+
+	if len(c.Dir) == 0 {
+		SendSMSToContact("No direction on your profile. Please provide a direction.", c)
+		return
+	}
+}
+
 func (c Contact) deleteContact() {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -404,6 +397,18 @@ func (c Contact) sendStations() {
 	SendSMSToContact(msg, c)
 }
 
+func (c Contact) provideConfig() {
+	contact := fetchContact(c.Phone)
+	alertTxt := fmt.Sprintf("Settings\n\nStation: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
+	SendSMSToContact(alertTxt, contact)
+}
+
+func (c Contact) sendHelp() {
+	contact := fetchContact(c.Phone)
+	alertTxt := "Stations: mont, powl, ncon (!stations for list)\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
+	SendSMSToContact(alertTxt, contact)
+}
+
 func (c Contact) save() {
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -435,11 +440,6 @@ func (c Contact) save() {
 		os.Exit(1)
 	}
 
-}
-
-func sortSliceOfTargetTrains(targets []TargetTrain) []TargetTrain {
-	sort.Slice(targets, func(i, j int) bool { return targets[i].Minutes < targets[j].Minutes })
-	return targets
 }
 
 type Estimates []struct {
