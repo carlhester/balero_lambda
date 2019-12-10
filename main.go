@@ -1,22 +1,17 @@
 package main
 
+import . "balero_lambda/contact"
 import "fmt"
 import "context"
 import "net/http"
 import "io/ioutil"
-import "os"
 import "strconv"
 import "strings"
 import "sort"
 import "time"
 import "encoding/json"
-import "github.com/aws/aws-sdk-go/aws"
-import "github.com/aws/aws-sdk-go/aws/session"
-import "github.com/aws/aws-sdk-go/service/sns"
 import "github.com/aws/aws-lambda-go/lambda"
 import "github.com/aws/aws-lambda-go/events"
-import "github.com/aws/aws-sdk-go/service/dynamodb"
-import "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
 func main() {
 	lambda.Start(HandleRequest)
@@ -29,12 +24,12 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		messageEnvelope := unpackSNSEvent(record)
 
-		var contact Contact = fetchContact(messageEnvelope.OriginationNumber)
+		var contact Contact = FetchContact(messageEnvelope.OriginationNumber)
 
 		if len(contact.Phone) == 0 {
-			addNewUser(messageEnvelope.OriginationNumber)
-			contact = fetchContact(messageEnvelope.OriginationNumber)
-			contact.sendHelp()
+			AddNewUser(messageEnvelope.OriginationNumber)
+			contact = FetchContact(messageEnvelope.OriginationNumber)
+			contact.SendHelp()
 			return
 		}
 
@@ -42,11 +37,11 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		switch msg {
 		case "!help":
-			contact.sendHelp()
+			contact.SendHelp()
 			return
 
 		case "!stations":
-			contact.sendStations()
+			contact.SendStations()
 			return
 
 		case "12th", "16th", "19th", "24th", "ashb", "antc", "balb",
@@ -56,33 +51,33 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 			"nbrk", "ncon", "oakl", "orin", "pitt", "pctr", "phil",
 			"powl", "rich", "rock", "sbrn", "sfia", "sanl", "shay",
 			"ssan", "ucty", "warm", "wcrk", "wdub", "woak":
-			contact.updateStation(msg)
-			contact.provideConfig()
+			contact.UpdateStation(msg)
+			contact.ProvideConfig()
 			return
 
 		case "n", "s":
-			contact.updateDir(msg)
-			contact.provideConfig()
+			contact.UpdateDir(msg)
+			contact.ProvideConfig()
 			return
 
 		case "yellow", "red", "blue", "orange", "green":
-			contact.updateLine(msg)
-			contact.provideConfig()
+			contact.UpdateLine(msg)
+			contact.ProvideConfig()
 			return
 
 		case "whoami":
-			contact.provideConfig()
+			contact.ProvideConfig()
 			return
 
 		case "deleteme":
-			contact.deleteContact()
+			contact.DeleteContact()
 			return
 		}
 
-		contact.checkForEmptyFields()
+		contact.CheckForEmptyFields()
 
 		if !(msg == "ready") {
-			contact.sendHelp()
+			contact.SendHelp()
 			return
 		}
 
@@ -95,7 +90,7 @@ func HandleRequest(ctx context.Context, snsEvent events.SNSEvent) {
 
 		targetTrains = scoreTargets(targetTrains, contact)
 
-		// set up the message we'll send back to user
+		// set up the message we'll Send back to user
 		timeStamp := fetchTimestamp()
 		alertMsg := timeStamp
 		numResults := 0
@@ -213,19 +208,6 @@ func fetchTimestamp() string {
 	return timeStamp
 }
 
-func setupNewUser(c Contact) {
-	SendSMSToContact("Welcome!", c)
-	c.save()
-}
-
-func addNewUser(number string) {
-	c := Contact{Phone: number}
-	c.save()
-	txtMsg := fmt.Sprintf("New user. Added %s to db", c.Phone)
-	SendSMSToContact(txtMsg, c)
-	return
-}
-
 func rawDataFromUrl(url string) []byte {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -261,176 +243,10 @@ func convertStrMinutesToInt(minutes string) int {
 	return i
 }
 
-func SendSMSToContact(message string, contact Contact) {
-	sess := session.Must(session.NewSession())
-	svc := sns.New(sess)
-
-	params := &sns.PublishInput{
-		Message:     aws.String(message),
-		PhoneNumber: aws.String(contact.Phone),
-	}
-	_, err := svc.Publish(params)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-}
-
 func RawDataIntoDataStruct(rawData []byte) *Data {
 	var usableData Data
 	json.Unmarshal([]byte(rawData), &usableData)
 	return &usableData
-}
-
-func isNewContact(c Contact) bool {
-	contact := fetchContact(c.Phone)
-	if len(contact.Phone) > 0 {
-		return false
-	}
-	return true
-}
-
-func fetchContact(ph string) Contact {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-
-	svc := dynamodb.New(sess)
-	result, err := svc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String("db_test"),
-		Key: map[string]*dynamodb.AttributeValue{
-			"Phone": {
-				S: aws.String(ph),
-			},
-		},
-	})
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	contact := Contact{}
-	err = dynamodbattribute.UnmarshalMap(result.Item, &contact)
-	if err != nil {
-		fmt.Errorf("failed to unmarshal Query result items, %v", err)
-	}
-
-	return contact
-}
-
-func (c Contact) checkForEmptyFields() {
-	if len(c.Station) == 0 {
-		SendSMSToContact("No station on your profile. Please provide a station abbreviation.", c)
-		return
-	}
-
-	if len(c.Line) == 0 {
-		SendSMSToContact("No line on your profile. Please provide a line (color).", c)
-		return
-	}
-
-	if len(c.Dir) == 0 {
-		SendSMSToContact("No direction on your profile. Please provide a direction.", c)
-		return
-	}
-}
-
-func (c Contact) deleteContact() {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-
-	svc := dynamodb.New(sess)
-
-	input := &dynamodb.DeleteItemInput{
-		Key: map[string]*dynamodb.AttributeValue{
-			"Phone": {
-				S: aws.String(c.Phone),
-			},
-		},
-		TableName: aws.String("db_test"),
-	}
-
-	_, err := svc.DeleteItem(input)
-
-	if err != nil {
-		fmt.Printf("failed to delete result items, %v", err)
-	} else {
-		confirmation := fmt.Sprintf("Deleted %s", c.Phone)
-		SendSMSToContact(confirmation, c)
-	}
-}
-
-func (c Contact) updateDir(d string) {
-	c.Dir = d
-	c.save()
-}
-
-func (c Contact) updateLine(l string) {
-	c.Line = l
-	c.save()
-}
-
-func (c Contact) updateStation(s string) {
-	c.Station = s
-	c.save()
-}
-
-func (c Contact) sendStations() {
-	msg := "12th 16th 19th 24th ashb antc balb " +
-		"bayf cast civc cols colm conc daly " +
-		"dbrk dubl deln plza embr frmt ftvl " +
-		"glen hayw lafy lake mcar mlbr mont " +
-		"nbrk ncon oakl orin pitt pctr phil " +
-		"powl rich rock sbrn sfia sanl shay " +
-		"ssan ucty warm wcrk wdub woak"
-	SendSMSToContact(msg, c)
-}
-
-func (c Contact) provideConfig() {
-	contact := fetchContact(c.Phone)
-	alertTxt := fmt.Sprintf("Settings\n\nStation: %s\nDir: %s\nLine: %s", contact.Station, contact.Dir, contact.Line)
-	SendSMSToContact(alertTxt, contact)
-}
-
-func (c Contact) sendHelp() {
-	contact := fetchContact(c.Phone)
-	alertTxt := "Stations: mont, powl, ncon (!stations for list)\nDir: n, s\nLine: yellow, red, blue, orange, green\n\ncommands:\n!help - this command\ndeleteme - remove record\nwhoami - show config\nready - get train info"
-	SendSMSToContact(alertTxt, contact)
-}
-
-func (c Contact) save() {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
-
-	updContact := Contact{
-		Phone:   c.Phone,
-		Dir:     c.Dir,
-		Station: c.Station,
-		Line:    c.Line,
-	}
-
-	av, err := dynamodbattribute.MarshalMap(updContact)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	input := &dynamodb.PutItemInput{
-		Item:      av,
-		TableName: aws.String("db_test"),
-	}
-
-	_, err = svc.PutItem(input)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
 }
 
 type Estimates []struct {
@@ -489,13 +305,6 @@ type SNSMessage struct {
 	Body                       string `json:"messageBody"`
 	InboundMessageId           string `json:"inboundMessageId"`
 	PreviousPublishedMessageId string `json:"previousPublishedMessageId"`
-}
-
-type Contact struct {
-	Phone   string
-	Dir     string
-	Station string
-	Line    string
 }
 
 type TargetTrain struct {
