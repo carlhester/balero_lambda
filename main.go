@@ -141,22 +141,13 @@ func scoreTargets(targets []TargetTrain, c Contact) []TargetTrain {
 
 	for i, train := range targets {
 
+		switch train.TrainName {
 		// if train going to my stop add 2
-		if train.TrainName == "WCRK" {
+		case "WCRK":
 			targets[i].Score += 2
-		}
 
 		// if train going past my stop (NCON, ANTC, PHIL, PITT) add 1
-		if train.TrainName == "NCON" {
-			targets[i].Score += 1
-		}
-		if train.TrainName == "ANTC" {
-			targets[i].Score += 1
-		}
-		if train.TrainName == "PHIL" {
-			targets[i].Score += 1
-		}
-		if train.TrainName == "PITT" {
+		case "NCON", "ANTC", "PHIL", "PITT":
 			targets[i].Score += 1
 		}
 
